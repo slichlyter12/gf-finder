@@ -9,7 +9,7 @@ import hashlib
 from time import sleep
 
 # user created
-from Restaurant import Restaurant
+from Restaurant import *
 
 
 BASE_URL = "https://www.findmeglutenfree.com/search?a=97330&lat=44.6385&lng=-123.2929&sort=best"
@@ -18,7 +18,7 @@ OUTPUT_DIR = "../output/"
 
 
 def get_file_path(url, out_dir):
-    """computes the correct filename for reading/writing cached content at the specified URL"""
+    # computes the correct filename for reading/writing cached content at the specified URL
     os.makedirs(out_dir, exist_ok=True)
     filename = re.sub("[^a-zA-Z0-9]+", "-", url)
     if len(filename) > 30:
@@ -29,7 +29,6 @@ def get_file_path(url, out_dir):
 
 
 def retrieve(url: str):
-
     file_path = get_file_path(url, CACHE_DIR)
     file_path = os.path.abspath(file_path)
     if os.path.exists(file_path) and os.stat(file_path).st_size > 0:
@@ -45,10 +44,9 @@ def retrieve(url: str):
     soup = BeautifulSoup(r.text, "lxml")
     with open(file_path, 'wb') as f:
         print("->", file_path)
-        html = soup.prettify()
-        if len(html) == 0:
-            html = " "
-        f.write(html.encode("UTF-8"))
+        if len(soup) == 0:
+            soup = " "
+        f.write(soup.encode("UTF-8"))
     return soup
 
 
@@ -87,18 +85,18 @@ def get_restaurant_details(url):
 
     # get title
     title = soup.select_one(".biz-name")
-    restaurant.title = title.text
+    restaurant.title = title.text.strip()
 
     # get url
     restaurant.url = url
 
     # get rating
-    rating = soup.select_one(".rating")
-    restaurant.rating = rating.text
+    rating = soup.select_one(".biz-num-ratings span")
+    restaurant.rating = rating.text.strip()[:3] # Remove ' out of 5'
 
     # get votes
-    votes = soup.select_one(".votes")
-    restaurant.votes = votes.text
+    votes = soup.select_one(".biz-num-ratings .left10")
+    restaurant.votes = votes.text.strip()[:-7] # Remove ' rating'
 
     # get tags
     tags = soup.select_one(".biz-tags")
@@ -108,8 +106,8 @@ def get_restaurant_details(url):
 
     # get address
     address = soup.select_one("h2")
-    address = clean_address(address)
-    restaurant.address = address.text
+    address = clean_address(address.text)
+    restaurant.address = address.strip()
 
     # get hours
     hours = soup.select(".biz-hours")
@@ -134,8 +132,10 @@ def clean_tags(tags):
     if "+" in tags:
         tags = tags.split("+")
         tags = tags[0]
+        tags = tags.strip()
     tags = tags.split(", ")
     return tags
+
 
 def clean_address(address):
     if "Directions" in address:
@@ -144,20 +144,25 @@ def clean_address(address):
     return address
 
 
-restaurants = get_restaurants()
-filepath = get_file_path(BASE_URL, OUTPUT_DIR)
-with open(filepath + ".csv", 'w+') as outfile:
-    fieldnames = ['title', 'url', 'rating', 'votes', 'tags', 'address', 'hours']
-    writer = csv.DictWriter(outfile, fieldnames=fieldnames)
-    writer.writeheader()
+def scrape():
+    restaurants = get_restaurants()
+    filepath = get_file_path(BASE_URL, OUTPUT_DIR)
+    with open(filepath + ".csv", 'w+') as outfile:
+        fieldnames = ['title', 'url', 'rating', 'votes', 'tags', 'address', 'hours']
+        writer = csv.DictWriter(outfile, fieldnames=fieldnames)
+        writer.writeheader()
 
-    for link, title in restaurants.items():
-        restaurant = get_restaurant_details(link)
+        for link, title in restaurants.items():
+            restaurant = get_restaurant_details(link)
 
-        writer.writerow({'title': title,
-                         'url': link,
-                         'rating': restaurant.rating,
-                         'votes': restaurant.votes,
-                         'tags': restaurant.tags,
-                         'address': restaurant.address,
-                         'hours': restaurant.hours})
+            writer.writerow({'title': title,
+                             'url': link,
+                             'rating': restaurant.rating,
+                             'votes': restaurant.votes,
+                             'tags': restaurant.tags,
+                             'address': restaurant.address,
+                             'hours': restaurant.hours})
+
+
+if __name__ == "__main__":
+    scrape()
